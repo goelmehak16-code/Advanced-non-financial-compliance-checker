@@ -3,7 +3,7 @@ import re
 
 st.set_page_config(page_title="Compliance Analyzer", layout="wide")
 
-st.title("📄 Labour Code + MRT Compliance Analyzer")
+st.title("Labour Code + MRT Compliance Analyzer")
 
 uploaded = st.file_uploader("Upload Document (TXT format recommended)", type=["txt"])
 
@@ -18,13 +18,13 @@ if uploaded:
         st.error("⚠ Unable to read file. Please upload a TXT file.")
         st.stop()
 
-    st.subheader("🔍 Document Preview")
+    st.subheader("Document Preview")
     st.text(text[:500])
 
     # -----------------------------
     # DOCUMENT TYPE DETECTION
     # -----------------------------
-    st.subheader("📌 Document Type")
+    st.subheader("Document Type")
 
     if "payslip" in text or "earnings" in text:
         doc_type = "Payslip"
@@ -40,7 +40,7 @@ if uploaded:
     # -----------------------------
     # LABOUR COMPLIANCE CHECK
     # -----------------------------
-    st.header("⚖️ Labour Code Compliance")
+    st.header("Labour Code Compliance")
 
     checks = {
         "Employee Details": ["employee", "name"],
@@ -68,7 +68,7 @@ if uploaded:
     # -----------------------------
     # SUMMARY
     # -----------------------------
-    st.header("📊 Compliance Summary")
+    st.header("Compliance Summary")
 
     st.write("### ✅ Present")
     for p in present:
@@ -81,11 +81,11 @@ if uploaded:
     st.metric("Compliance Score", f"{score:.0f}%")
 
     if score >= 80:
-        st.success("🟢 High Compliance")
+        st.success("High Compliance")
     elif score >= 50:
-        st.warning("🟡 Moderate Compliance")
+        st.warning("Moderate Compliance")
     else:
-        st.error("🔴 Low Compliance")
+        st.error("Low Compliance")
 
     # -----------------------------
     # DISCLAIMER
@@ -104,7 +104,7 @@ if uploaded:
     # -----------------------------
     # MRT ANALYSIS
     # -----------------------------
-    st.header("🏦 MRT Compensation Analysis")
+    st.header("MRT Compensation Analysis")
 
     def extract_value(keyword):
         match = re.search(keyword + r"\s*[:\-]?\s*(\d+)", text)
@@ -118,7 +118,7 @@ if uploaded:
 
     if basic > 0 and variable > 0:
 
-        st.subheader("📊 Extracted Values")
+        st.subheader("Extracted Values")
         st.write(f"Basic: ₹{basic}")
         st.write(f"Variable: ₹{variable}")
 
@@ -126,12 +126,12 @@ if uploaded:
         non_cash_ratio = (non_cash / variable) * 100 if variable else 0
         deferred_ratio = (deferred / variable) * 100 if variable else 0
 
-        st.subheader("📈 MRT Ratios")
+        st.subheader("MRT Ratios")
         st.metric("Variable Pay %", f"{var_ratio:.0f}%")
         st.metric("Non-Cash %", f"{non_cash_ratio:.0f}%")
         st.metric("Deferred %", f"{deferred_ratio:.0f}%")
 
-        st.subheader("⚖️ MRT Compliance")
+        st.subheader("MRT Compliance")
 
         issues = []
 
