@@ -102,56 +102,83 @@ if uploaded:
     st.info("This is a preliminary automated check and does not replace legal audit.")
 
     # -----------------------------
-    # MRT ANALYSIS
+  st.header("🏦 MRT Ratio Analysis (Auto Extracted)")
+
+import re
+
+# -----------------------------
+# EXTRACT VALUES FROM DOCUMENT
+# -----------------------------
+def extract_amount(keywords):
+    for k in keywords:
+        match = re.search(k + r"\s*[:\-]?\s*(\d+)", text)
+        if match:
+            return int(match.group(1))
+    return 0
+
+fixed_pay = extract_amount(["fixed pay", "basic salary", "basic"])
+variable_pay = extract_amount(["variable pay", "bonus", "performance bonus"])
+non_cash = extract_amount(["stock", "esop", "non-cash"])
+deferred = extract_amount(["deferred"])
+
+# -----------------------------
+# SHOW EXTRACTED DATA
+# -----------------------------
+st.subheader("📊 Extracted Compensation Data")
+
+st.write(f"Fixed Pay: ₹{fixed_pay}")
+st.write(f"Variable Pay: ₹{variable_pay}")
+st.write(f"Non-Cash Component: ₹{non_cash}")
+st.write(f"Deferred Component: ₹{deferred}")
+
+# -----------------------------
+# CALCULATE RATIOS
+# -----------------------------
+if fixed_pay > 0 and variable_pay > 0:
+
+    var_ratio = (variable_pay / fixed_pay) * 100
+    non_cash_ratio = (non_cash / variable_pay) * 100 if variable_pay else 0
+    deferred_ratio = (deferred / variable_pay) * 100 if variable_pay else 0
+
+    st.subheader("📈 MRT Ratios")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Variable Pay %", f"{var_ratio:.0f}%")
+    col2.metric("Non-Cash %", f"{non_cash_ratio:.0f}%")
+    col3.metric("Deferred %", f"{deferred_ratio:.0f}%")
+
     # -----------------------------
-    st.header("MRT Compensation Analysis")
+    # COMPLIANCE CHECK
+    # -----------------------------
+    st.subheader("⚖️ MRT Compliance Evaluation")
 
-    def extract_value(keyword):
-        match = re.search(keyword + r"\s*[:\-]?\s*(\d+)", text)
-        return int(match.group(1)) if match else 0
+    issues = []
 
-    basic = extract_value("basic")
-    bonus = extract_value("bonus")
-    variable = bonus + extract_value("variable")
-    non_cash = extract_value("stock") + extract_value("esop")
-    deferred = extract_value("deferred")
+    # Variable cap
+    if var_ratio > 300:
+        issues.append("Variable pay exceeds 300% cap")
 
-    if basic > 0 and variable > 0:
+    elif var_ratio > 200:
+        st.warning("⚠ Variable pay above 200% → higher non-cash requirement applies")
 
-        st.subheader("Extracted Values")
-        st.write(f"Basic: ₹{basic}")
-        st.write(f"Variable: ₹{variable}")
+    # Non-cash rule
+    if var_ratio <= 200 and non_cash_ratio < 50:
+        issues.append("Non-cash component below 50%")
 
-        var_ratio = (variable / basic) * 100
-        non_cash_ratio = (non_cash / variable) * 100 if variable else 0
-        deferred_ratio = (deferred / variable) * 100 if variable else 0
+    if var_ratio > 200 and non_cash_ratio < 67:
+        issues.append("Non-cash component below 67%")
 
-        st.subheader("MRT Ratios")
-        st.metric("Variable Pay %", f"{var_ratio:.0f}%")
-        st.metric("Non-Cash %", f"{non_cash_ratio:.0f}%")
-        st.metric("Deferred %", f"{deferred_ratio:.0f}%")
+    # Deferral rule
+    if deferred_ratio < 60:
+        issues.append("Deferred component below 60%")
 
-        st.subheader("MRT Compliance")
-
-        issues = []
-
-        if var_ratio > 300:
-            issues.append("Variable pay exceeds 300% cap")
-
-        if var_ratio <= 200 and non_cash_ratio < 50:
-            issues.append("Non-cash below 50% requirement")
-
-        if var_ratio > 200 and non_cash_ratio < 67:
-            issues.append("Non-cash below 67% requirement")
-
-        if deferred_ratio < 60:
-            issues.append("Deferred component below 60% requirement")
-
-        if issues:
-            for i in issues:
-                st.error(i)
-        else:
-            st.success("✔ MRT Compensation appears compliant")
-
+    # Output
+    if issues:
+        for issue in issues:
+            st.error(issue)
     else:
-        st.warning("⚠ Not enough data to compute MRT ratios")
+        st.success("✔ MRT Compensation is compliant")
+
+else:
+    st.warning("⚠ Unable to extract sufficient MRT data from document")
