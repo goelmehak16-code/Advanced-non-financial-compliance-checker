@@ -1,111 +1,157 @@
 import streamlit as st
 import re
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
-from pdfminer.high_level import extract_text as pdf_extract
-from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+st.set_page_config(page_title="Compliance Analyzer", layout="wide")
 
-# -------------------------------
-# TEXT EXTRACTION
-# -------------------------------
-def extract_text(file):
-    if file.name.endswith(".pdf"):
-        with open("temp.pdf", "wb") as f:
-            f.write(file.read())
-        return pdf_extract("temp.pdf")
+st.title("📄 Labour Code + MRT Compliance Analyzer")
+
+uploaded = st.file_uploader("Upload Document (TXT format recommended)", type=["txt"])
+
+if uploaded:
+
+    # -----------------------------
+    # TEXT EXTRACTION
+    # -----------------------------
+    try:
+        text = uploaded.read().decode("utf-8", errors="ignore").lower()
+    except:
+        st.error("⚠ Unable to read file. Please upload a TXT file.")
+        st.stop()
+
+    st.subheader("🔍 Document Preview")
+    st.text(text[:500])
+
+    # -----------------------------
+    # DOCUMENT TYPE DETECTION
+    # -----------------------------
+    st.subheader("📌 Document Type")
+
+    if "payslip" in text or "earnings" in text:
+        doc_type = "Payslip"
+    elif "appointment" in text:
+        doc_type = "Appointment Letter"
+    elif "register" in text:
+        doc_type = "Register"
     else:
-        return file.read().decode("utf-8")
+        doc_type = "Unknown"
 
+    st.success(f"Detected: {doc_type}")
 
-# -------------------------------
-# AI ANALYSIS
-# -------------------------------
-def ai_analysis(text):
-    prompt = f"""
-    You are a labour law compliance expert.
+    # -----------------------------
+    # LABOUR COMPLIANCE CHECK
+    # -----------------------------
+    st.header("⚖️ Labour Code Compliance")
 
-    Analyze the following document and provide:
-    1. Document type
-    2. Summary
-    3. Compliance score (0-100)
-    4. Missing provisions
-    5. Risk level (Low/Medium/High)
-    6. MRT ratios if possible
-
-    Document:
-    {text[:4000]}
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return response.choices[0].message.content
-
-
-# -------------------------------
-# MRT (basic fallback)
-# -------------------------------
-def calculate_mrt(text):
-    numbers = list(map(int, re.findall(r"\d+", text)))
-
-    if not numbers:
-        return {"status": "Not computable"}
-
-    return {
-        "avg": sum(numbers)/len(numbers),
-        "max": max(numbers),
-        "min": min(numbers)
+    checks = {
+        "Employee Details": ["employee", "name"],
+        "Wage Period": ["period"],
+        "Basic Salary": ["basic"],
+        "Earnings Breakdown": ["allowance", "salary"],
+        "Deductions": ["deduction", "pf", "tax"],
+        "Net Pay": ["net"],
+        "Payment Date": ["payment"]
     }
 
+    present = []
+    missing = []
 
-# -------------------------------
-# STREAMLIT UI
-# -------------------------------
-st.set_page_config(page_title="AI Labour Compliance Checker", layout="wide")
+    for item, keywords in checks.items():
+        if any(word in text for word in keywords):
+            st.success(f"✔ {item}")
+            present.append(item)
+        else:
+            st.error(f"❌ {item}")
+            missing.append(item)
 
-st.title("AI Labour Compliance Checker (Big4 Style)")
+    score = (len(present) / len(checks)) * 100
 
-uploaded_file = st.file_uploader("Upload document", type=["pdf", "txt"])
+    # -----------------------------
+    # SUMMARY
+    # -----------------------------
+    st.header("📊 Compliance Summary")
 
-if uploaded_file:
-    with st.spinner("Analyzing with AI..."):
-        text = extract_text(uploaded_file)
-        ai_result = ai_analysis(text)
-        mrt = calculate_mrt(text)
+    st.write("### ✅ Present")
+    for p in present:
+        st.write(f"- {p}")
 
-    # -------------------------------
-    # OUTPUT
-    # -------------------------------
-    st.subheader("AI Analysis")
-    st.write(ai_result)
+    st.write("### ❌ Missing")
+    for m in missing:
+        st.write(f"- {m}")
 
-    st.subheader("MRT (Auto Extracted)")
-    st.json(mrt)
+    st.metric("Compliance Score", f"{score:.0f}%")
 
-    # -------------------------------
-    # CHART
-    # -------------------------------
-    st.subheader("Compliance Visualization")
+    if score >= 80:
+        st.success("🟢 High Compliance")
+    elif score >= 50:
+        st.warning("🟡 Moderate Compliance")
+    else:
+        st.error("🔴 Low Compliance")
 
-    data = {
-        "Category": ["Compliance", "Gaps"],
-        "Score": [70, 30]  # Placeholder (AI upgrade later)
-    }
+    # -----------------------------
+    # DISCLAIMER
+    # -----------------------------
+    st.header("⚠️ Disclaimer")
 
-    df = pd.DataFrame(data)
+    if missing:
+        st.write("The document is missing the following elements required under labour compliance:")
+        for m in missing:
+            st.write(f"- {m}")
+    else:
+        st.success("Document appears compliant with key labour provisions")
 
-    fig, ax = plt.subplots()
-    ax.bar(df["Category"], df["Score"])
-    ax.set_title("Compliance Overview")
+    st.info("This is a preliminary automated check and does not replace legal audit.")
 
-    st.pyplot(fig)
+    # -----------------------------
+    # MRT ANALYSIS
+    # -----------------------------
+    st.header("🏦 MRT Compensation Analysis")
 
-    # -------------------------------
-    # ⚠️ DISCLAIMER
-    # -------------------------------
-    st.warning("This AI output is indicative and should not replace legal audit.")
+    def extract_value(keyword):
+        match = re.search(keyword + r"\s*[:\-]?\s*(\d+)", text)
+        return int(match.group(1)) if match else 0
+
+    basic = extract_value("basic")
+    bonus = extract_value("bonus")
+    variable = bonus + extract_value("variable")
+    non_cash = extract_value("stock") + extract_value("esop")
+    deferred = extract_value("deferred")
+
+    if basic > 0 and variable > 0:
+
+        st.subheader("📊 Extracted Values")
+        st.write(f"Basic: ₹{basic}")
+        st.write(f"Variable: ₹{variable}")
+
+        var_ratio = (variable / basic) * 100
+        non_cash_ratio = (non_cash / variable) * 100 if variable else 0
+        deferred_ratio = (deferred / variable) * 100 if variable else 0
+
+        st.subheader("📈 MRT Ratios")
+        st.metric("Variable Pay %", f"{var_ratio:.0f}%")
+        st.metric("Non-Cash %", f"{non_cash_ratio:.0f}%")
+        st.metric("Deferred %", f"{deferred_ratio:.0f}%")
+
+        st.subheader("⚖️ MRT Compliance")
+
+        issues = []
+
+        if var_ratio > 300:
+            issues.append("Variable pay exceeds 300% cap")
+
+        if var_ratio <= 200 and non_cash_ratio < 50:
+            issues.append("Non-cash below 50% requirement")
+
+        if var_ratio > 200 and non_cash_ratio < 67:
+            issues.append("Non-cash below 67% requirement")
+
+        if deferred_ratio < 60:
+            issues.append("Deferred component below 60% requirement")
+
+        if issues:
+            for i in issues:
+                st.error(i)
+        else:
+            st.success("✔ MRT Compensation appears compliant")
+
+    else:
+        st.warning("⚠ Not enough data to compute MRT ratios")
